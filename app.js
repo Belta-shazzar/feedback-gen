@@ -24,6 +24,9 @@ app.use(helmet())
 app.use(cors())
 app.use(xss())
 
+app.get("/", (req, res) => {
+  res.send('<h1>Feedback Gen API</h1><a href="/api-docs">Documentation</a>');
+});
 app.use("/api/v1/user", userRouter);
 app.use("/api/v1/form", formRouter);
 app.use("/api/v1/form-response", responseRouter)
