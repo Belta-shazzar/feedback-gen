@@ -2,6 +2,16 @@ const Form = require("../model/form");
 const { NotFoundError, BadRequestError } = require("../errors");
 const { getExactQuestionType, QuestionTypes } = require("./form.service");
 
+const getForm = async (formID) => {
+  const form = await Form.findOne({ _id: formID });
+
+  if (!form) {
+    throw new NotFoundError("Resourse not found or has been deleted");
+  }
+
+  return form;
+};
+
 const formResponseValidation = async (formID, responseBody) => {
   // console.log(responseBody)
   const responseForm = await getForm(formID);
@@ -16,22 +26,12 @@ const formResponseValidation = async (formID, responseBody) => {
     throw new BadRequestError("Invalid form response");
   }
 
-  checkQuestions(formQuestions, responseBodyQuestions);
+  conformQuestionsMatch(formQuestions, responseBodyQuestions);
 
   actualResponseValidation(formData, responseBody);
 
   // console.log(formQuestions);
   // console.log(responseBodyQuestions);
-};
-
-const getForm = async (formID) => {
-  const form = await Form.findOne({ _id: formID });
-
-  if (!form) {
-    throw new NotFoundError("Resourse not found or has been deleted");
-  }
-
-  return form;
 };
 
 // put every question in formData and responseBody into two different arrays for comparision
@@ -51,7 +51,7 @@ const populate2Arrays = (formData, responseBody) => {
 };
 
 // Check if questions in saved form and response are same.
-const checkQuestions = (savedFormQuestions, responseQuestions) => {
+const conformQuestionsMatch = (savedFormQuestions, responseQuestions) => {
   for (let i = 0; i < savedFormQuestions.length; i++) {
     if (savedFormQuestions[i] !== responseQuestions[i]) {
       throw new BadRequestError(
@@ -136,26 +136,25 @@ const actualResponseValidation = (formData, responseBody) => {
         }
 
         if (rows.length !== equivAnswerKeyArray.length) {
-          if (rows[i] !== equivAnswerKeyArray[i]) {
-            throw new BadRequestError(MCGErrMsg);
-          }
+          throw new BadRequestError(MCGErrMsg);
         }
 
         for (let i = 0; i < rows.length; i++) {
           if (rows[i] !== equivAnswerKeyArray[i]) {
             throw new BadRequestError(MCGErrMsg);
-          } 
+          }
         }
 
-        for (const key in equivAnswerKeyArray) {
-          if (!columns.includes(equivAnswerKeyArray[key])) {
+        for (const key in equivalentAnswer) {
+          if (!columns.includes(equivalentAnswer[key])) {
             throw new BadRequestError(MCGErrMsg);
           }
         }
-      
+
         break;
 
       case QuestionTypes.CheckBoxGrid:
+        checkBoxGridValidation(constraint, required, equivalentAnswer);
         break;
 
       case QuestionTypes.Date:
@@ -178,6 +177,45 @@ const actualResponseValidation = (formData, responseBody) => {
     validateRequiredInput(required, equivalentAnswer);
     if (!constraint.includes(equivalentAnswer, 1)) {
       throw new BadRequestError("Invalid form response ** MultiChoices2");
+    }
+  }
+};
+
+const checkBoxGridValidation = (constraint, required, equivalentAnswer) => {
+  const { rows, columns } = constraint[1];
+  const errMsg = "Invalid form response ** CheckBoxGrid";
+  let responseKeyHolder = [];
+
+  for (const key in equivalentAnswer) {
+    responseKeyHolder.push(key);
+
+    if (required) {
+      if (!(equivalentAnswer[key].length > 0)) {
+        throw new BadRequestError(`${errMsg} 1`);
+      }
+    }
+  }
+
+  for (const key in equivalentAnswer) {
+    let equivAnswerValue = equivalentAnswer[key];
+
+    // Check that values of keys in response === values of rows
+    if (responseKeyHolder.length === rows.length) {
+      for (let i = 0; i < rows.length; i++) {
+        if (responseKeyHolder[i] !== rows[i]) {
+          throw new BadRequestError(`${errMsg} 2`);
+        }
+      }
+    } else {
+      throw new BadRequestError(`${errMsg} 3`);
+    }
+
+    // Ensure the values for each response key array is in line with column order
+    equivAnswerValue = convArrayToSet(equivAnswerValue);
+    for (let i = 0; i < equivAnswerValue.length; i++) {
+      if (!columns.includes(equivAnswerValue[i])) {
+        throw new BadRequestError(`${errMsg} 4`);
+      }
     }
   }
 };
@@ -206,4 +244,19 @@ const validateRequiredInput = (required, answer) => {
   }
 };
 
+const convArrayToSet = (arr) => {
+  const arrayOfDistinctValues = [];
+
+  for (let i = 0; i < arr.length; i++) {
+    let element = arr[i];
+    if (!arrayOfDistinctValues.includes(element)) {
+      arrayOfDistinctValues.push(element);
+    }
+  }
+  return arrayOfDistinctValues;
+};
+
 module.exports = { formResponseValidation };
+
+// Requied: 63a4a2b247a8a2b8d4749d29
+// Not Required: 63a4c5f047a8a2b8d4749d2b
